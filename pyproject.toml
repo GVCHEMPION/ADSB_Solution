@@ -6,6 +6,7 @@ dependencies = [
     "accelerate>=1.15.0",
     "datasets>=5.0.1",
     "ipykernel>=7.3.0",
+    "lightgbm>=4.7.0",
     "natasha>=1.6.0",
     "nbconvert>=7.17.1",
     "numpy>=2.4.6",
@@ -42,7 +43,7 @@ target-version = "py311"
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "NPY", "ERA"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "experiment", "check_no_comments"]
+known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "ranker", "experiment", "check_no_comments"]
 
 [tool.mypy]
 strict = true
@@ -50,5 +51,5 @@ mypy_path = ["src", "scripts"]
 files = ["src", "scripts", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "tqdm.*", "pyarrow.*", "natasha.*", "sentence_transformers.*", "datasets.*"]
+module = ["sklearn.*", "tqdm.*", "pyarrow.*", "natasha.*", "sentence_transformers.*", "datasets.*", "lightgbm.*"]
 ignore_missing_imports = true

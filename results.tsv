@@ -3,11 +3,13 @@ char_tfidf_fields	0	0.2724	0.4389	0.6672
 char_tfidf_fields	1	0.2663	0.4242	0.6591
 char_tfidf_geo	0	0.6568	0.7621	0.8774
 char_tfidf_geo	1	0.6699	0.7644	0.8725
-char_tfidf_geo_mc	0	0.7449	0.8482	0.9313
-char_tfidf_geo_mc	1	0.7444	0.8525	0.9334
 hybrid_geo_mc	0	0.7728	0.8723	0.9513
 hybrid_geo_mc	1	0.7740	0.8764	0.9504
 char_tfidf	0	0.2919	0.4654	0.6763
 char_tfidf	1	0.3036	0.4536	0.6617
 e5ft_hybrid	0	0.8292	0.9103	0.9648
 e5ft_hybrid	1	0.8247	0.9033	0.9613
+ranker	0	0.8486	0.9139	0.9267
+ranker	1	0.8416	0.9073	0.9163
+char_tfidf_geo_mc	0	0.7449	0.8482	0.9313
+char_tfidf_geo_mc	1	0.7444	0.8525	0.9334
