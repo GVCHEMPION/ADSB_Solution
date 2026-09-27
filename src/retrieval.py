@@ -65,15 +65,14 @@ def load(name: str, split: str) -> Candidates | None:
 
 def report(name: str, idx: npt.NDArray[np.int32], queries: pd.DataFrame, corpus: pd.DataFrame) -> None:
     ids = corpus["item_id"].to_numpy()
-    lines = []
+    rows = []
     for fold in (0, 1):
         mask = (queries["fold"] == fold).to_numpy()
         preds = ids[idx[mask]].tolist()
         relevant = queries.loc[mask, "relevant"].tolist()
         scores = {k: recall_at_k(preds, relevant, k) for k in (50, 200, 1000)}
         print(f"{name:28s} fold{fold}  " + "  ".join(f"@{k} {s:.4f}" for k, s in scores.items()))
-        lines.append("\t".join([name, str(fold), *(f"{s:.4f}" for s in scores.values())]))
-    if not RESULTS.exists():
-        RESULTS.write_text("method\tfold\tr50\tr200\tr1000\n", encoding="utf-8")
-    with RESULTS.open("a", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+        rows.append({"method": name, "fold": fold, **{f"r{k}": round(s, 4) for k, s in scores.items()}})
+    old = pd.read_csv(RESULTS, sep="	") if RESULTS.exists() else pd.DataFrame()
+    kept = old[old["method"] != name] if len(old) else old
+    pd.concat([kept, pd.DataFrame(rows)]).to_csv(RESULTS, sep="	", index=False, float_format="%.4f")
