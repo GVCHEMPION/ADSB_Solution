@@ -5,6 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import scipy.sparse as sp
+import torch
 from tqdm import tqdm
 
 from eval import recall_at_k
@@ -16,7 +17,8 @@ CACHE = ROOT / "cache"
 RESULTS = ROOT / "results.tsv"
 
 Candidates = tuple[npt.NDArray[np.int32], npt.NDArray[np.float32]]
-Part = tuple[sp.csr_matrix, sp.csr_matrix, float, bool]
+Matrix = sp.csr_matrix | npt.NDArray[np.float16]
+Part = tuple[Matrix, Matrix, float, bool]
 
 
 def topk(scores: npt.NDArray[np.float32], k: int) -> Candidates:
@@ -33,19 +35,35 @@ def chunk_scores(m: sp.csr_matrix, max_norm: bool) -> npt.NDArray[np.float32]:
     return scores
 
 
-def sparse_search(
+def part_scores(Q: Matrix, XT: Matrix | torch.Tensor, rows: slice, max_norm: bool) -> npt.NDArray[np.float32]:
+    if isinstance(XT, torch.Tensor):
+        q = torch.from_numpy(np.ascontiguousarray(Q[rows])).to(XT.device)
+        scores: npt.NDArray[np.float32] = (q @ XT).float().cpu().numpy()
+        if max_norm:
+            scores /= scores.max(1, keepdims=True) + 1e-9
+        return scores
+    return chunk_scores(sp.csr_matrix(Q[rows] @ XT), max_norm)
+
+
+def transpose(X: Matrix) -> Matrix | torch.Tensor:
+    if isinstance(X, np.ndarray):
+        return torch.from_numpy(X).to("cuda").T.contiguous()
+    return X.T.tocsr()
+
+
+def search(
     parts: Sequence[Part],
     k: int = K,
     adjust: Callable[[slice, npt.NDArray[np.float32]], npt.NDArray[np.float32]] | None = None,
 ) -> Candidates:
-    transposed = [(Q, X.T.tocsr(), weight, max_norm) for Q, X, weight, max_norm in parts]
+    transposed = [(Q, transpose(X), weight, max_norm) for Q, X, weight, max_norm in parts]
     n_queries, n_items = parts[0][0].shape[0], parts[0][1].shape[0]
     out = []
     for i in tqdm(range(0, n_queries, CHUNK), desc="search"):
         rows = slice(i, min(i + CHUNK, n_queries))
         scores = np.zeros((rows.stop - rows.start, n_items), np.float32)
         for Q, XT, weight, max_norm in transposed:
-            scores += weight * chunk_scores(Q[rows] @ XT, max_norm)
+            scores += weight * part_scores(Q, XT, rows, max_norm)
         out.append(topk(scores if adjust is None else adjust(rows, scores), k))
     return np.vstack([c[0] for c in out]), np.vstack([c[1] for c in out])
 

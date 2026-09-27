@@ -3,6 +3,8 @@ name = "adsb-solution"
 version = "0.1.0"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+    "accelerate>=1.15.0",
+    "datasets>=5.0.1",
     "ipykernel>=7.3.0",
     "natasha>=1.6.0",
     "nbconvert>=7.17.1",
@@ -40,7 +42,7 @@ target-version = "py311"
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "NPY", "ERA"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "experiment", "check_no_comments"]
+known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "experiment", "check_no_comments"]
 
 [tool.mypy]
 strict = true
@@ -48,5 +50,5 @@ mypy_path = ["src", "scripts"]
 files = ["src", "scripts", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "tqdm.*", "pyarrow.*", "natasha.*"]
+module = ["sklearn.*", "tqdm.*", "pyarrow.*", "natasha.*", "sentence_transformers.*", "datasets.*"]
 ignore_missing_imports = true

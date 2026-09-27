@@ -8,7 +8,7 @@ import scipy.sparse as sp
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 from lemmas import lemmatize, lemmatized_items
-from retrieval import Candidates, sparse_search
+from retrieval import Candidates, search
 from signals import Adjust, geo_boost, geo_microcat_boost
 
 PARAMS_HEAD = 200
@@ -100,7 +100,7 @@ def char_tfidf(
     boost: Callable[[pd.DataFrame, pd.DataFrame, pd.DataFrame], Adjust] | None = None,
 ) -> Candidates:
     Q, X = char_matrices(queries, corpus, text)
-    return sparse_search([(Q, X, 1.0, False)], adjust=boost(queries, corpus, rest) if boost else None)
+    return search([(Q, X, 1.0, False)], adjust=boost(queries, corpus, rest) if boost else None)
 
 
 char_tfidf_fields = partial(char_tfidf, text=text_fields)
@@ -137,6 +137,6 @@ def bm25_matrices(
 def hybrid_geo_mc(queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame) -> Candidates:
     Q, X = char_matrices(queries, corpus, text_head)
     Qb, W = bm25_matrices(queries, corpus, text_with_description)
-    return sparse_search(
+    return search(
         [(Q, X, 1.0, False), (Qb, W, W_BM25, True)], adjust=geo_microcat_boost(queries, corpus, rest)
     )
