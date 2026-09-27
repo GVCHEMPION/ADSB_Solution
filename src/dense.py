@@ -15,8 +15,9 @@ from sentence_transformers.sentence_transformer.training_args import (
 )
 
 from eval import make_holdout
-from lexical import normalize, text_head
-from retrieval import CACHE, ROOT
+from lexical import W_BM25, bm25_matrices, char_matrices, normalize, text_head, text_with_description
+from retrieval import CACHE, ROOT, Candidates, Part, search
+from signals import geo_microcat_boost
 
 MODELS = {
     "e5": ("multilingual-e5-base", "query: ", "passage: "),
@@ -26,6 +27,7 @@ MODELS = {
 }
 BASE = {"e5ft": "e5", "bgeft": "bge"}
 MAX_LEN = 128
+W_LEXICAL = 0.2
 BATCH = 256
 
 Embeddings = npt.NDArray[np.float16]
@@ -70,6 +72,15 @@ def item_embeddings(name: str, ids: pd.Series, texts: pd.Series, variant: str) -
     assert known is not None
     emb: Embeddings = known[pos.loc[ids.to_numpy()].to_numpy()]
     return emb
+
+
+def dense_hybrid(queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame, name: str) -> Candidates:
+    D = item_embeddings(name, corpus["item_id"], text_head(corpus), "text_head")
+    Qe = encode(name, queries["search_query"].tolist(), query=True)
+    Q, X = char_matrices(queries, corpus, text_head)
+    Qb, W = bm25_matrices(queries, corpus, text_with_description)
+    parts: list[Part] = [(Qe, D, 1.0, False), (Q, X, W_LEXICAL, False), (Qb, W, W_LEXICAL * W_BM25, True)]
+    return search(parts, adjust=geo_microcat_boost(queries, corpus, rest))
 
 
 def train_pairs(rest: pd.DataFrame, max_pairs: int, seed: int = 0) -> pd.DataFrame:

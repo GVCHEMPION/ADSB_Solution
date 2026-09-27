@@ -1,8 +1,10 @@
 import argparse
 from collections.abc import Callable
+from functools import partial
 
 import pandas as pd
 
+import dense
 import lexical
 import retrieval
 from eval import load_bench, make_holdout
@@ -15,6 +17,7 @@ METHODS: dict[str, Method] = {
     "char_tfidf_geo": lexical.char_tfidf_geo,
     "char_tfidf_geo_mc": lexical.char_tfidf_geo_mc,
     "hybrid_geo_mc": lexical.hybrid_geo_mc,
+    "e5ft_hybrid": partial(dense.dense_hybrid, name="e5ft"),
 }
 
 
