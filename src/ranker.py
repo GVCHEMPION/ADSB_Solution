@@ -13,8 +13,8 @@ from lexical import bm25_matrices, char_matrices, text_head, text_with_descripti
 from signals import distance_km, geo_arrays, microcat_prior
 
 POOL = 500
-BASE = "e5ft_hybrid"
-DENSE = "e5ft"
+BASE = "bgeft_hybrid"
+DENSE = ("bgeft",)
 Idx = npt.NDArray[np.int32]
 
 
@@ -39,11 +39,10 @@ def features(
     rest: pd.DataFrame,
     cand: Idx,
     scores: npt.NDArray[np.float32],
+    dense: tuple[str, ...] = DENSE,
 ) -> pd.DataFrame:
     Q, X = char_matrices(queries, corpus, text_head)
     Qb, W = bm25_matrices(queries, corpus, text_with_description)
-    Qe = encode(DENSE, queries["search_query"].tolist(), query=True)
-    D = item_embeddings(DENSE, corpus["item_id"], text_head(corpus), "text_head")
     g = geo_arrays(queries, corpus, rest)
     log_prior, item_col = microcat_prior(queries, corpus, rest)
     qi = np.repeat(np.arange(len(queries))[:, None], cand.shape[1], 1)
@@ -57,8 +56,16 @@ def features(
         per_query: npt.NDArray[np.float64] = values.to_numpy(dtype=np.float64)[qi]
         return per_query
 
+    dense_cols = {
+        f"dense_{name}": pair_dense(
+            encode(name, queries["search_query"].tolist(), query=True),
+            item_embeddings(name, corpus["item_id"], text_head(corpus), "text_head"),
+            cand,
+        )
+        for name in dense
+    }
     cols = {
-        "dense": pair_dense(Qe, D, cand),
+        **dense_cols,
         "char": pair_sparse(Q, X, cand),
         "bm25": bm25,
         "bm25_rel": bm25 / (bm25.max(1, keepdims=True) + 1e-9),
@@ -118,13 +125,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", action="store_true", help="учить на всей валидации и писать answer.csv")
     ap.add_argument("--out", default="answer.csv")
+    ap.add_argument("--base", default=BASE, help="метод, чьи кандидаты образуют пул")
+    ap.add_argument("--dense", nargs="+", default=list(DENSE), help="dense-модели для признаков")
     args = ap.parse_args()
+    dense = tuple(args.dense)
+    name = f"ranker_{args.base}_{'+'.join(dense)}"
 
     queries, corpus, rest = make_holdout()
-    cached = retrieval.load(BASE, "valid")
-    assert cached is not None, f"сначала посчитай кандидатов: experiment.py {BASE}"
+    cached = retrieval.load(args.base, "valid")
+    assert cached is not None, f"сначала посчитай кандидатов: experiment.py {args.base}"
     cand, scores = cached[0][:, :POOL], cached[1][:, :POOL]
-    X = features(queries, corpus, rest, cand, scores)
+    X = features(queries, corpus, rest, cand, scores, dense)
     y = labels(queries, corpus, cand)
     fold = queries["fold"].to_numpy()
 
@@ -134,17 +145,17 @@ def main() -> None:
             tr, te = fold == train_fold, fold != train_fold
             model = fit(X[rows_of(tr)], y[rows_of(tr)], int(tr.sum()))
             reranked[te] = rerank(model, X[rows_of(te)], cand[te])
-        retrieval.report("ranker", reranked, queries, corpus)
+        retrieval.report(name, reranked, queries, corpus)
         importance = pd.Series(model.booster_.feature_importance("gain"), index=X.columns)
         print((importance / importance.sum()).sort_values(ascending=False).round(3).to_string())
         return
 
     model = fit(X, y, len(queries))
     bq, items, train = load_bench()
-    cached = retrieval.load(BASE, "bench")
-    assert cached is not None, f"сначала посчитай кандидатов: experiment.py {BASE} --bench"
+    cached = retrieval.load(args.base, "bench")
+    assert cached is not None, f"сначала посчитай кандидатов: experiment.py {args.base} --bench"
     bcand, bscores = cached[0][:, :POOL], cached[1][:, :POOL]
-    top = rerank(model, features(bq, items, train, bcand, bscores), bcand)[:, :50]
+    top = rerank(model, features(bq, items, train, bcand, bscores, dense), bcand)[:, :50]
     ids = items["item_id"].to_numpy()
     answer = pd.DataFrame({"query_id": bq["query_id"], "answer": [" ".join(row) for row in ids[top]]})
     answer.to_csv(args.out, index=False)

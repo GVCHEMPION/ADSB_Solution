@@ -18,6 +18,7 @@ METHODS: dict[str, Method] = {
     "char_tfidf_geo_mc": lexical.char_tfidf_geo_mc,
     "hybrid_geo_mc": lexical.hybrid_geo_mc,
     "e5ft_hybrid": partial(dense.dense_hybrid, name="e5ft"),
+    "bgeft_hybrid": partial(dense.dense_hybrid, name="bgeft"),
 }
 
 
