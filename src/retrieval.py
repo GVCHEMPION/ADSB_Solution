@@ -73,6 +73,6 @@ def report(name: str, idx: npt.NDArray[np.int32], queries: pd.DataFrame, corpus:
         scores = {k: recall_at_k(preds, relevant, k) for k in (50, 200, 1000)}
         print(f"{name:28s} fold{fold}  " + "  ".join(f"@{k} {s:.4f}" for k, s in scores.items()))
         rows.append({"method": name, "fold": fold, **{f"r{k}": round(s, 4) for k, s in scores.items()}})
-    old = pd.read_csv(RESULTS, sep="	") if RESULTS.exists() else pd.DataFrame()
+    old = pd.read_csv(RESULTS, sep="\t") if RESULTS.exists() else pd.DataFrame()
     kept = old[old["method"] != name] if len(old) else old
-    pd.concat([kept, pd.DataFrame(rows)]).to_csv(RESULTS, sep="	", index=False, float_format="%.4f")
+    pd.concat([kept, pd.DataFrame(rows)]).to_csv(RESULTS, sep="\t", index=False, float_format="%.4f")
