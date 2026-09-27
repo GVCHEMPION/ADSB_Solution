@@ -32,6 +32,13 @@ uv run python src/experiment.py hybrid_geo_mc --bench   # пишет answer.csv 
 uv run python src/eval.py answer.csv                    # проверка формата перед отправкой
 ```
 
+`uv sync` ставит всё, включая torch с CUDA 12.6. Индекс PyTorch подключён в `pyproject.toml`
+как `explicit`: с него берётся только torch, остальные пакеты идут с PyPI. Без этого uv находит
+на индексе PyTorch старые копии обычных библиотек (например, `tqdm<=4.66.5`) и отказывается
+брать новые с PyPI. CUDA-сборка torch используется на Windows и Linux, на macOS ставится обычная
+с PyPI. `requires-python` ограничен сверху (`<3.14`), чтобы uv не пытался собрать окружение под
+версии Python, для которых ещё нет колёс torch.
+
 Кандидаты каждого метода кэшируются в `cache/` (top-1000 id и скоры). Повторный запуск берёт кэш,
 `--force` пересчитывает. Лемматы корпуса тоже кэшируются: первый прогон лемматизирует
 ~189k объявлений за несколько минут, дальше это бесплатно.
@@ -191,5 +198,6 @@ uv run python tests/test_no_comments.py       # самопроверка чек�
 ## Open-source
 
 pandas, pyarrow, NumPy, SciPy, scikit-learn (`TfidfVectorizer`, `CountVectorizer`), tqdm, Jupyter,
-[Natasha](https://github.com/natasha/natasha) (slovnet-морфотеггер, `MorphVocab` на pymorphy2);
+[Natasha](https://github.com/natasha/natasha) (slovnet-морфотеггер, `MorphVocab` на pymorphy2),
+PyTorch, sentence-transformers;
 для разработки ruff, mypy, pandas-stubs, scipy-stubs. Внешних API нет.
