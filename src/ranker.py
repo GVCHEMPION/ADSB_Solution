@@ -10,7 +10,7 @@ import retrieval
 from dense import encode, item_embeddings
 from eval import load_bench, make_holdout
 from lexical import bm25_matrices, char_matrices, text_head, text_with_description
-from signals import distance_km, geo_arrays, microcat_prior
+from signals import distance_km, geo_arrays, location_affinity, microcat_prior
 
 POOL = 500
 BASE = "bgeft_hybrid"
@@ -45,6 +45,7 @@ def features(
     Qb, W = bm25_matrices(queries, corpus, text_with_description)
     g = geo_arrays(queries, corpus, rest)
     log_prior, item_col = microcat_prior(queries, corpus, rest)
+    affinity, evidence = location_affinity(queries, corpus, rest, cand)
     qi = np.repeat(np.arange(len(queries))[:, None], cand.shape[1], 1)
     bm25 = pair_sparse(Qb, W, cand)
 
@@ -72,6 +73,8 @@ def features(
         "same_location": g.qloc[qi] == g.iloc[cand],
         "log_km": np.log1p(distance_km(g, qi, cand)),
         "log_microcat": log_prior[qi, item_col[cand]],
+        "location_affinity": affinity,
+        "location_evidence": evidence[qi],
         "pool_score": scores,
         "pool_rank": np.broadcast_to(np.arange(cand.shape[1]), cand.shape),
         "item_rating": item("item_rating"),

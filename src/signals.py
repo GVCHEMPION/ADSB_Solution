@@ -85,6 +85,20 @@ def geo_boost(queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame) -
     return adjust
 
 
+def location_affinity(
+    queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame, cand: npt.NDArray[np.int32]
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    pairs = rest.groupby(["search_location_id", "item_location_id"]).size()
+    total = pairs.groupby(level=0).sum()
+    share = pairs / total.reindex(pairs.index.get_level_values(0)).to_numpy()
+    qloc = queries["search_location_id"].to_numpy()
+    iloc = corpus["item_location_id"].to_numpy()
+    keys = pd.MultiIndex.from_arrays([np.repeat(qloc, cand.shape[1]), iloc[cand].ravel()])
+    affinity = np.asarray(share.reindex(keys).fillna(0.0), dtype=np.float64).reshape(cand.shape)
+    counts = np.asarray(queries["search_location_id"].map(total).fillna(0), dtype=np.float64)
+    return affinity, np.log1p(counts)
+
+
 def normalize_query(s: pd.Series) -> pd.Series:
     return s.fillna("").str.lower().str.replace("ё", "е", regex=False)
 
