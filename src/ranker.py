@@ -110,11 +110,10 @@ def fit(X: pd.DataFrame, y: npt.NDArray[np.int32], n_queries: int) -> lgb.LGBMRa
     return model
 
 
-def rerank(model: lgb.LGBMRanker, X: pd.DataFrame, cand: Idx) -> Idx:
-    pred = np.asarray(model.predict(X)).reshape(cand.shape)
+def rerank(model: lgb.LGBMRanker, X: pd.DataFrame, cand: Idx) -> retrieval.Candidates:
+    pred = np.asarray(model.predict(X), dtype=np.float32).reshape(cand.shape)
     order = np.argsort(-pred, 1)
-    reranked: Idx = np.take_along_axis(cand, order, 1)
-    return reranked
+    return np.take_along_axis(cand, order, 1), np.take_along_axis(pred, order, 1)
 
 
 def rows_of(mask: npt.NDArray[np.bool_]) -> npt.NDArray[np.bool_]:
@@ -140,11 +139,12 @@ def main() -> None:
     fold = queries["fold"].to_numpy()
 
     if not args.bench:
-        reranked = cand.copy()
+        reranked, reranked_scores = cand.copy(), np.zeros(cand.shape, np.float32)
         for train_fold in (0, 1):
             tr, te = fold == train_fold, fold != train_fold
             model = fit(X[rows_of(tr)], y[rows_of(tr)], int(tr.sum()))
-            reranked[te] = rerank(model, X[rows_of(te)], cand[te])
+            reranked[te], reranked_scores[te] = rerank(model, X[rows_of(te)], cand[te])
+        retrieval.save(name, "valid", (reranked, reranked_scores))
         retrieval.report(name, reranked, queries, corpus)
         importance = pd.Series(model.booster_.feature_importance("gain"), index=X.columns)
         print((importance / importance.sum()).sort_values(ascending=False).round(3).to_string())
@@ -155,7 +155,9 @@ def main() -> None:
     cached = retrieval.load(args.base, "bench")
     assert cached is not None, f"сначала посчитай кандидатов: experiment.py {args.base} --bench"
     bcand, bscores = cached[0][:, :POOL], cached[1][:, :POOL]
-    top = rerank(model, features(bq, items, train, bcand, bscores, dense), bcand)[:, :50]
+    ranked = rerank(model, features(bq, items, train, bcand, bscores, dense), bcand)
+    retrieval.save(name, "bench", ranked)
+    top = ranked[0][:, :50]
     ids = items["item_id"].to_numpy()
     answer = pd.DataFrame({"query_id": bq["query_id"], "answer": [" ".join(row) for row in ids[top]]})
     answer.to_csv(args.out, index=False)
