@@ -1,4 +1,5 @@
 import argparse
+import gc
 
 import lightgbm as lgb
 import numpy as np
@@ -154,6 +155,8 @@ def main() -> None:
         return
 
     model = fit(X, y, len(queries))
+    del X, y, queries, corpus, rest, cand, scores
+    gc.collect()
     bq, items, train = load_bench()
     cached = retrieval.load(args.base, "bench")
     assert cached is not None, f"сначала посчитай кандидатов: experiment.py {args.base} --bench"
