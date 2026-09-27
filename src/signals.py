@@ -35,9 +35,22 @@ class Geo(NamedTuple):
     ilon: npt.NDArray[np.float64]
 
 
+def effective_locations(queries: pd.DataFrame, rest: pd.DataFrame, known: pd.Index) -> pd.Series:
+    loc = queries["search_location_id"]
+    unknown = ~loc.isin(known)
+    if not unknown.any():
+        return loc
+    chosen = rest.loc[
+        rest["search_location_id"].isin(set(loc[unknown])), ["search_location_id", "item_location_id"]
+    ]
+    top = chosen.value_counts().reset_index().drop_duplicates("search_location_id")
+    mapping = top.set_index("search_location_id")["item_location_id"]
+    return loc.where(~unknown, loc.map(mapping)).fillna(loc).astype(loc.dtype)
+
+
 def geo_arrays(queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame) -> Geo:
     cent = location_centroids(corpus, rest.drop_duplicates("item_id"))
-    loc = queries["search_location_id"]
+    loc = effective_locations(queries, rest, cent.index)
     return Geo(
         loc.to_numpy(),
         np.radians(loc.map(cent["item_latitude"]).to_numpy(dtype=np.float64)),
