@@ -12,7 +12,7 @@ from eval import load_bench, make_holdout
 from lexical import bm25_matrices, char_matrices, text_head, text_with_description
 from signals import distance_km, geo_arrays, microcat_prior
 
-POOL = 300
+POOL = 500
 BASE = "e5ft_hybrid"
 DENSE = "e5ft"
 Idx = npt.NDArray[np.int32]
