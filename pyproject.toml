@@ -43,7 +43,7 @@ target-version = "py311"
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "NPY", "ERA"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "ranker", "experiment", "check_no_comments"]
+known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "ranker", "rerank", "experiment", "check_no_comments"]
 
 [tool.mypy]
 strict = true

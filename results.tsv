@@ -15,7 +15,7 @@ bgeft_hybrid	0	0.8393	0.9182	0.9671
 bgeft_hybrid	1	0.8327	0.9113	0.9680
 ranker_e5ft_hybrid_e5ft	0	0.8519	0.9209	0.9473
 ranker_e5ft_hybrid_e5ft	1	0.8473	0.9102	0.9350
-ranker_bgeft_hybrid_bgeft	0	0.8662	0.9258	0.9523
-ranker_bgeft_hybrid_bgeft	1	0.8556	0.9194	0.9443
 ranker_bgeft_hybrid_bgeft+e5ft	0	0.8628	0.9236	0.9523
 ranker_bgeft_hybrid_bgeft+e5ft	1	0.8553	0.9197	0.9443
+ranker_bgeft_hybrid_bgeft	0	0.8662	0.9258	0.9523
+ranker_bgeft_hybrid_bgeft	1	0.8556	0.9194	0.9443
