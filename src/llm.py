@@ -98,6 +98,7 @@ TASKS: dict[str, type[Reasoned]] = {"rewrite": Rewrite, "kinds": Kinds}
 EXAMPLES = 5
 RETRIES = 3
 MAX_TOKENS = 600
+REQUEST_TIMEOUT = 120.0
 
 
 def system_prompt(task: str) -> str:
@@ -157,6 +158,8 @@ def client() -> tuple[AsyncOpenAI, str]:
         base_url=base_url,
         api_key=os.environ.get("LLM_API_KEY", "local"),
         http_client=DefaultAsyncHttpxClient(trust_env=False),
+        timeout=REQUEST_TIMEOUT,
+        max_retries=1,
     )
     return api, os.environ.get("LLM_MODEL", "local")
 
@@ -199,20 +202,26 @@ def answers(task: str) -> dict[str, object]:
     return {row["query"]: row["answer"] for row in rows}
 
 
-async def run(task: str, texts: list[str], examples: list[list[tuple[str, str, str]]]) -> None:
+async def run(
+    task: str, texts: list[str], examples: list[list[tuple[str, str, str]]], minutes: float | None
+) -> None:
     api, model = client()
     done = set(answers(task))
     todo = [(t, ex) for t, ex in zip(texts, examples, strict=True) if t not in done]
     todo = list(dict((t, (t, ex)) for t, ex in todo).values())
     semaphore = asyncio.Semaphore(int(os.environ.get("LLM_CONCURRENCY", "4")))
-    failed = 0
+    deadline = time.monotonic() + minutes * 60 if minutes else float("inf")
+    failed = skipped = 0
     CACHE.mkdir(exist_ok=True)
     progress = tqdm(total=len(todo), desc=task)
     with open(cache_path(task), "a", encoding="utf-8") as out:
 
         async def one(text: str, ex: list[tuple[str, str, str]]) -> None:
-            nonlocal failed
+            nonlocal failed, skipped
             async with semaphore:
+                if time.monotonic() > deadline:
+                    skipped += 1
+                    return
                 try:
                     result = await ask(api, model, task, text, ex)
                 except (APIError, ValidationError):
@@ -225,7 +234,10 @@ async def run(task: str, texts: list[str], examples: list[list[tuple[str, str, s
 
         await asyncio.gather(*(one(t, ex) for t, ex in todo))
     progress.close()
-    print(f"{task}: готово {len(todo) - failed}, не удалось {failed}, в кэше {len(answers(task))}")
+    print(
+        f"{task}: готово {len(todo) - failed - skipped}, не удалось {failed}, "
+        f"отложено до следующего запуска {skipped}, в кэше {len(answers(task))}"
+    )
 
 
 def split_queries(split: str) -> tuple[list[str], pd.DataFrame]:
@@ -253,13 +265,16 @@ def main() -> None:
     ap.add_argument("--task", choices=sorted(TASKS), default="kinds")
     ap.add_argument("--split", choices=["valid", "bench"], default="valid")
     ap.add_argument("--limit", type=int, default=None, help="обработать только первые N запросов")
+    ap.add_argument(
+        "--minutes", type=float, default=None, help="остановиться через N минут, продолжить потом"
+    )
     args = ap.parse_args()
     if args.command == "check":
         asyncio.run(check(args.task))
         return
     texts, rest = split_queries(args.split)
     texts = texts[: args.limit]
-    asyncio.run(run(args.task, texts, few_shot(texts, rest)))
+    asyncio.run(run(args.task, texts, few_shot(texts, rest), args.minutes))
 
 
 if __name__ == "__main__":
