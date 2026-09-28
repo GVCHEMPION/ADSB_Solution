@@ -14,7 +14,7 @@ from eval import load_bench, make_holdout
 from lexical import bm25_matrices, char_matrices, service_kind, text_head, text_with_description
 from signals import distance_km, geo_arrays, location_affinity, microcat_prior, normalize_query
 
-POOL = 500
+POOL = 1000
 BASE = "bgeft_hybrid"
 DENSE = ("bgeft",)
 Idx = npt.NDArray[np.int32]
