@@ -151,7 +151,7 @@ def client() -> tuple[AsyncOpenAI, str]:
     base_url = os.environ.get("LLM_BASE_URL")
     if not base_url:
         raise SystemExit(
-            "нужна переменная LLM_BASE_URL (адрес llama-server, например http://localhost:8080/v1)"
+            "нужна переменная LLM_BASE_URL (адрес llama-server, например http://localhost:8081/v1)"
         )
     api = AsyncOpenAI(
         base_url=base_url,
