@@ -17,8 +17,10 @@ from tqdm import tqdm
 
 from eval import load_bench, make_holdout
 from lexical import service_kind
-from retrieval import CACHE, topk
+from retrieval import ROOT, topk
 from signals import normalize_query
+
+ANSWERS = ROOT / "data"
 
 ServiceKind = Literal[
     "Обучение, курсы",
@@ -190,7 +192,7 @@ async def ask(
 
 
 def cache_path(task: str) -> str:
-    return str(CACHE / f"llm_{task}.jsonl")
+    return str(ANSWERS / f"llm_{task}.jsonl")
 
 
 def answers(task: str) -> dict[str, object]:
@@ -212,7 +214,7 @@ async def run(
     semaphore = asyncio.Semaphore(int(os.environ.get("LLM_CONCURRENCY", "4")))
     deadline = time.monotonic() + minutes * 60 if minutes else float("inf")
     failed = skipped = 0
-    CACHE.mkdir(exist_ok=True)
+    ANSWERS.mkdir(exist_ok=True)
     progress = tqdm(total=len(todo), desc=task)
     with open(cache_path(task), "a", encoding="utf-8") as out:
 

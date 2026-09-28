@@ -80,7 +80,12 @@ uv run python src/dense.py bgeft --mini-batch 32        # дообучение, 
 `uv sync` ставит всё, включая torch с CUDA 12.6. Индекс PyTorch подключён в `pyproject.toml` как
 `explicit`: с него берётся только torch, остальные пакеты идут с PyPI.
 
-**2. Переписанные запросы.** В корне проекта создать файл с переменными `.env` (он в `.gitignore`):
+**2. Переписанные запросы — готовы, шаг можно пропустить.** Ответы LLM на все 6 399 уникальных
+текстов запросов валидации и боя лежат в репозитории: `data/llm_rewrite.jsonl`, по строке на текст
+(запрос, шаги рассуждения, ответ). Пайплайн берёт их оттуда, и с ними `answer.csv` воспроизводится
+точно.
+
+Чтобы перегенерировать их, в корне проекта создать файл с переменными `.env` (он в `.gitignore`):
 
 ```
 HF_TOKEN=<токен Hugging Face>
@@ -89,17 +94,23 @@ LLM_CONCURRENCY=8
 ```
 
 ```bash
-docker compose --profile download up download-model     # один раз: GGUF-модель и draft-модель
+docker compose --profile download up download-model     # один раз: GGUF-модель и draft-модель, ~8 ГБ
 docker compose up -d llama                              # llama-server на http://localhost:8081/v1
-uv run python src/llm.py run --task rewrite --split valid --minutes 60
-uv run python src/llm.py run --task rewrite --split bench --minutes 60
+mv data/llm_rewrite.jsonl data/llm_rewrite.old.jsonl    # иначе готовые ответы не будут запрошены заново
+uv run python src/llm.py run --task rewrite --split valid
+uv run python src/llm.py run --task rewrite --split bench
 docker compose stop llama                               # освободить ~12 ГБ памяти перед остальным
 ```
 
-~6 400 уникальных текстов, около 3.5 часа. Ответы дописываются построчно в `cache/llm_rewrite.jsonl`;
-`--minutes` останавливает прогон через заданное время, повторный запуск продолжает с места остановки.
+**Сколько это займёт:** на RTX 3080 Ti в 8 параллельных слотов ~35 запросов в минуту, то есть ~2 ч
+на 4 000 текстов валидации и ~1 ч 10 мин на 2 399 новых текстов боя, всего около 3–3.5 часов плюс
+загрузка модели. Ответы дописываются в файл построчно: прерванный прогон продолжается с места
+остановки, а `--minutes N` сам останавливает его через N минут, чтобы делить работу на части.
 Генерация детерминированная (`--temp 0`, фиксированный seed), но параллельные слоты llama.cpp могут
-давать мелкие расхождения в тексте.
+давать мелкие расхождения в тексте, а с ними — и в итоговом ответе.
+
+`data/llm_kinds.jsonl` — ответы задачи `kinds` из пилота на 300 запросах (History.md), в финальном
+решении не используются.
 
 **3. Поиск, ранкер, ответ.**
 
@@ -134,6 +145,7 @@ uv run python src/eval.py answer.csv                                            
 | `src/rerank.py` | cross-encoder reranker — проверен и отклонён, в пайплайн не входит |
 | `notebooks/01_eda.ipynb` | разбор данных |
 | `compose.yaml` | llama-server и загрузка GGUF-модели |
+| `data/llm_*.jsonl` | готовые ответы LLM по тексту запроса |
 | `results.tsv` | последний прогон каждого метода: Recall@50/200/1000 по фолдам |
 
 В `src/experiment.py` остались и промежуточные методы (`char_tfidf`, `hybrid_geo_mc`, `e5ft_hybrid`,
