@@ -130,9 +130,9 @@ def labels(queries: pd.DataFrame, corpus: pd.DataFrame, cand: Idx) -> npt.NDArra
 def fit(X: pd.DataFrame, y: npt.NDArray[np.int32], n_queries: int) -> lgb.LGBMRanker:
     model = lgb.LGBMRanker(
         objective="lambdarank",
-        n_estimators=400,
+        n_estimators=800,
         learning_rate=0.05,
-        num_leaves=63,
+        num_leaves=7,
         min_child_samples=20,
         subsample=0.8,
         subsample_freq=1,

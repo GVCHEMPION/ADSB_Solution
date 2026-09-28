@@ -25,5 +25,5 @@ bgeft_hybrid_rw	0	0.8693	0.9327	0.9788
 bgeft_hybrid_rw	1	0.8570	0.9288	0.9770
 bgeft_hybrid_rw05	0	0.8687	0.9346	0.9783
 bgeft_hybrid_rw05	1	0.8594	0.9298	0.9785
-ranker_bgeft_hybrid_rw05_bgeft_llm-rewrite	0	0.9174	0.9570	0.9656
-ranker_bgeft_hybrid_rw05_bgeft_llm-rewrite	1	0.9046	0.9528	0.9627
+ranker_bgeft_hybrid_rw05_bgeft_llm-rewrite	0	0.9247	0.9569	0.9656
+ranker_bgeft_hybrid_rw05_bgeft_llm-rewrite	1	0.9135	0.9538	0.9627

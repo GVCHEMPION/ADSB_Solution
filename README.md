@@ -17,7 +17,9 @@ Recall@50 на локальной валидации: два фолда по 2 0
 | + LightGBM-ранкер над пулом top-500 | `src/ranker.py` | 0.866 | 0.856 |
 | + локация объявлений для локаций поиска без объявлений | `signals.effective_locations` | 0.898 | 0.891 |
 | + близость локаций как признак ранкера | `signals.location_affinity` | 0.910 | 0.898 |
-| + запрос, переписанный LLM, как признак ранкера | `src/ranker.py --llm rewrite` | **0.916** | **0.902** |
+| + запрос, переписанный LLM, как признак ранкера | `src/ranker.py --llm rewrite` | 0.916 | 0.902 |
+| + переписанный запрос в поиске кандидатов | `bgeft_hybrid_rw05` | 0.917 | 0.905 |
+| + мелкие деревья в ранкере (7 листьев, 800 деревьев) | `src/ranker.py` | **0.925** | **0.914** |
 
 Лидерборд:
 
@@ -44,9 +46,12 @@ uv sync
 uv run hf download deepvk/USER-bge-m3 --local-dir models/USER-bge-m3
 uv run python src/dense.py bgeft --mini-batch 32        # дообучение USER-bge-m3, ~1 ч 50 мин на RTX 3080 Ti
 uv run python src/experiment.py bgeft_hybrid            # кандидаты и Recall@50/200/1000 на валидации
-uv run python src/experiment.py bgeft_hybrid --bench    # кандидаты для боя
-uv run python src/ranker.py                             # ранкер: честный Recall@50 по обоим фолдам
-uv run python src/ranker.py --bench                     # ранкер на всей валидации, пишет answer.csv
+uv run python src/llm.py run --task rewrite --split valid   # переписанные запросы, нужен llama-server (см. src/llm.py)
+uv run python src/llm.py run --task rewrite --split bench
+uv run python src/experiment.py bgeft_hybrid_rw05          # кандидаты с переписанным запросом
+uv run python src/experiment.py bgeft_hybrid_rw05 --bench  # кандидаты для боя
+uv run python src/ranker.py --base bgeft_hybrid_rw05 --llm rewrite          # честный Recall@50 по обоим фолдам
+uv run python src/ranker.py --base bgeft_hybrid_rw05 --llm rewrite --bench  # пишет answer.csv
 uv run python src/category0.py                          # правило для запросов без категории, правит answer.csv
 uv run python src/eval.py answer.csv                    # проверка формата перед отправкой
 ```
@@ -208,9 +213,22 @@ USER-bge-m3 дообучается так же (`python src/dense.py bgeft --min
 по весу лексики и масштабу бустов выходит на плато в пределах ±0.004. Лучший строгий максимум
 (`lex = 0.5`, бусты ×1.5) даёт тот же fold1, поэтому взяты веса без пересчёта бустов.
 
+**Переписанный запрос в поиске** (`dense_hybrid(rewrite=w)`, методы `bgeft_hybrid_rw` и
+`bgeft_hybrid_rw05`): dense-вектор запроса заменяется нормированной суммой `v(запрос) + w · v(ответ
+LLM из задачи rewrite)`, лексические части не меняются.
+
+| вариант | @50 fold0 / fold1 | @500 fold0 / fold1 | @1000 fold0 / fold1 |
+|---|---|---|---|
+| `bgeft_hybrid` | 0.862 / 0.854 | 0.963 / 0.959 | 0.976 / 0.975 |
+| `w = 1` | 0.869 / 0.857 | 0.962 / 0.963 | 0.979 / 0.977 |
+| `w = 0.5` | 0.869 / 0.859 | 0.966 / 0.963 | 0.978 / 0.979 |
+
+Для ранкера важен пул top-500, по нему на fold0 лучше `w = 0.5`. Ранкер на этом пуле:
+0.9164 / 0.9022 → 0.9174 / 0.9046.
+
 ### `src/ranker.py` — ранкер поверх пула
 
-Пул — top-500 кандидатов `bgeft_hybrid` (флаг `--base`): в нём правильный ответ есть у 94–95%
+Пул — top-500 кандидатов `bgeft_hybrid_rw05` (флаг `--base`, раньше `bgeft_hybrid`): в нём правильный ответ есть у 94–95%
 запросов против 83–84% в top-50. Dense-признаки задаются флагом `--dense`. LightGBM `lambdarank`
 переупорядочивает пул по признакам пары запрос-кандидат: dense-скор, символьный TF-IDF, BM25 (сырой
 и относительный внутри пула), совпадение локации, логарифм расстояния, `log P(microcat)`, близость
@@ -230,6 +248,26 @@ USER-bge-m3 дообучается так же (`python src/dense.py bgeft --min
 ранжирует fold1, и наоборот. Для боя ранкер учится на всех 4 000 запросах.
 
 По важности (gain) лидируют ранг и скор в пуле, затем расстояние, близость локаций и BM25.
+
+**Гиперпараметры.** Сетка на закэшированных признаках (пул `bgeft_hybrid_rw05`, `--llm rewrite`),
+Recall@50 fold0 / fold1:
+
+| вариант | fold0 | fold1 |
+|---|---|---|
+| 63 листа, 400 деревьев, lr 0.05 (было) | 0.9174 | 0.9046 |
+| 31 лист | 0.9203 | 0.9075 |
+| 15 листьев | 0.9225 | 0.9112 |
+| **7 листьев, 800 деревьев** | **0.9247** | **0.9135** |
+| 7 листьев, 1500 деревьев, lr 0.03 | 0.9248 | 0.9129 |
+| 4 листа, 1200 деревьев | 0.9236 | 0.9106 |
+| 127 листьев, `min_child_samples=50` | 0.9164 | 0.9013 |
+| `rank_xendcg` вместо `lambdarank` | 0.8208 | 0.8057 |
+
+Мелкие деревья лучше: обучающих запросов всего 2 000 на фолд, и глубокие деревья переобучаются.
+Не помогли: `lambdarank_truncation_level=100`, `min_child_samples=100`, `colsample_bytree=0.5`.
+
+**Отклонено:** BM25 и символьный TF-IDF по переписанному запросу как признаки ранкера — 0.9174 /
+0.9046 → 0.9157 / 0.9050, на fold0 хуже.
 
 | вариант | fold0 | fold1 |
 |---|---|---|
