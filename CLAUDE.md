@@ -56,7 +56,11 @@ uv run ruff format . && uv run ruff check .
 uv run mypy                                   # strict
 uv run python scripts/check_no_comments.py
 uv run python tests/test_no_comments.py
+uv run python tests/test_llm_schema.py
 ```
+
+LLM (`src/llm.py`): local llama.cpp via the `openai` client; URL comes from `LLM_BASE_URL`, loaded
+by python-dotenv from the gitignored env file in the repo root. The user runs the server.
 
 ## Gotchas
 

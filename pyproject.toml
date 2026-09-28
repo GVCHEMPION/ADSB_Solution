@@ -10,8 +10,11 @@ dependencies = [
     "natasha>=1.6.0",
     "nbconvert>=7.17.1",
     "numpy>=2.4.6",
+    "openai>=3.19.2",
     "pandas>=3.0.6",
     "pyarrow>=25.0.1",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
     "scikit-learn>=1.9.1",
     "sentence-transformers>=6.1.0",
     "setuptools<81",
@@ -43,7 +46,7 @@ target-version = "py311"
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "NPY", "ERA"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "ranker", "rerank", "category0", "experiment", "check_no_comments"]
+known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "ranker", "rerank", "category0", "llm", "experiment", "check_no_comments"]
 
 [tool.mypy]
 strict = true

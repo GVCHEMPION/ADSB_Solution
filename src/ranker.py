@@ -7,11 +7,12 @@ import numpy.typing as npt
 import pandas as pd
 import scipy.sparse as sp
 
+import llm
 import retrieval
 from dense import encode, item_embeddings
 from eval import load_bench, make_holdout
-from lexical import bm25_matrices, char_matrices, text_head, text_with_description
-from signals import distance_km, geo_arrays, location_affinity, microcat_prior
+from lexical import bm25_matrices, char_matrices, service_kind, text_head, text_with_description
+from signals import distance_km, geo_arrays, location_affinity, microcat_prior, normalize_query
 
 POOL = 500
 BASE = "bgeft_hybrid"
@@ -34,6 +35,33 @@ def pair_dense(Qe: npt.NDArray[np.float16], D: npt.NDArray[np.float16], cand: Id
     return out
 
 
+def llm_features(
+    queries: pd.DataFrame, corpus: pd.DataFrame, cand: Idx, tasks: tuple[str, ...]
+) -> dict[str, npt.NDArray[np.float64]]:
+    texts = normalize_query(queries["search_query"]).tolist()
+    cols: dict[str, npt.NDArray[np.float64]] = {}
+    if "kinds" in tasks:
+        predicted = llm.answers("kinds")
+        kinds = np.array([service_kind(p) for p in corpus["item_infm_params_text"]], dtype=object)
+        weight = np.full(cand.shape, np.nan)
+        for i, text in enumerate(texts):
+            answer = predicted.get(text)
+            if isinstance(answer, list):
+                rank = {k: 1 / (pos + 1) for pos, k in enumerate(answer)}
+                weight[i] = [rank.get(k, 0.0) for k in kinds[cand[i]]]
+        print(f"llm kinds: ответ есть у {np.mean([t in predicted for t in texts]):.1%} запросов")
+        cols["llm_kind"] = weight
+    if "rewrite" in tasks:
+        predicted = llm.answers("rewrite")
+        rewritten = [str(predicted.get(t, t)) for t in texts]
+        print(f"llm rewrite: ответ есть у {np.mean([t in predicted for t in texts]):.1%} запросов")
+        D = item_embeddings(DENSE[0], corpus["item_id"], text_head(corpus), "text_head")
+        cols["llm_rewrite_dense"] = pair_dense(encode(DENSE[0], rewritten, query=True), D, cand).astype(
+            np.float64
+        )
+    return cols
+
+
 def features(
     queries: pd.DataFrame,
     corpus: pd.DataFrame,
@@ -41,6 +69,7 @@ def features(
     cand: Idx,
     scores: npt.NDArray[np.float32],
     dense: tuple[str, ...] = DENSE,
+    llm_tasks: tuple[str, ...] = (),
 ) -> pd.DataFrame:
     Q, X = char_matrices(queries, corpus, text_head)
     Qb, W = bm25_matrices(queries, corpus, text_with_description)
@@ -68,6 +97,7 @@ def features(
     }
     cols = {
         **dense_cols,
+        **llm_features(queries, corpus, cand, llm_tasks),
         "char": pair_sparse(Q, X, cand),
         "bm25": bm25,
         "bm25_rel": bm25 / (bm25.max(1, keepdims=True) + 1e-9),
@@ -130,15 +160,16 @@ def main() -> None:
     ap.add_argument("--out", default="answer.csv")
     ap.add_argument("--base", default=BASE, help="метод, чьи кандидаты образуют пул")
     ap.add_argument("--dense", nargs="+", default=list(DENSE), help="dense-модели для признаков")
+    ap.add_argument("--llm", nargs="*", default=[], choices=sorted(llm.TASKS), help="признаки из ответов LLM")
     args = ap.parse_args()
-    dense = tuple(args.dense)
-    name = f"ranker_{args.base}_{'+'.join(dense)}"
+    dense, llm_tasks = tuple(args.dense), tuple(args.llm)
+    name = f"ranker_{args.base}_{'+'.join(dense)}" + "".join(f"_llm-{t}" for t in llm_tasks)
 
     queries, corpus, rest = make_holdout()
     cached = retrieval.load(args.base, "valid")
     assert cached is not None, f"сначала посчитай кандидатов: experiment.py {args.base}"
     cand, scores = cached[0][:, :POOL], cached[1][:, :POOL]
-    X = features(queries, corpus, rest, cand, scores, dense)
+    X = features(queries, corpus, rest, cand, scores, dense, llm_tasks)
     y = labels(queries, corpus, cand)
     fold = queries["fold"].to_numpy()
 
@@ -161,7 +192,7 @@ def main() -> None:
     cached = retrieval.load(args.base, "bench")
     assert cached is not None, f"сначала посчитай кандидатов: experiment.py {args.base} --bench"
     bcand, bscores = cached[0][:, :POOL], cached[1][:, :POOL]
-    ranked = rerank(model, features(bq, items, train, bcand, bscores, dense), bcand)
+    ranked = rerank(model, features(bq, items, train, bcand, bscores, dense, llm_tasks), bcand)
     retrieval.save(name, "bench", ranked)
     top = ranked[0][:, :50]
     ids = items["item_id"].to_numpy()

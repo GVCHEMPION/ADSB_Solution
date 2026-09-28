@@ -72,6 +72,11 @@ def service_fields(params: str) -> str:
     return " ".join(dict.fromkeys(v for v in values if v))
 
 
+def service_kind(params: str | None) -> str:
+    parts = KEY_RE.split(params or "")
+    return next((v.strip() for k, v in zip(parts[1::2], parts[2::2], strict=True) if k == "Вид услуги"), "")
+
+
 def text_head(items: pd.DataFrame) -> pd.Series:
     params = items["item_infm_params_text"].fillna("").str[:PARAMS_HEAD]
     return normalize(items["item_title_raw"] + " " + params)

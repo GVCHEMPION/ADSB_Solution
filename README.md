@@ -244,6 +244,53 @@ USER-bge-m3 дообучается так же (`python src/dense.py bgeft --min
 Вторая дообученная модель как признак ничего не добавляет. Вероятная причина — обе обучены на одних
 и тех же парах, и сигнал у них во многом общий; отдельно это не проверялось.
 
+### `src/llm.py` — LLM для понимания запроса (этап 5, в работе)
+
+Локальная LLM в llama.cpp (`llama-server` в Docker, модель в GGUF) через OpenAI-совместимый API и
+библиотеку `openai`. Внешних API нет: адрес — локальный сервер.
+
+**Схема ответа** — pydantic-модели, общая база `Reasoned` с полем `reason_steps: list[str]` (от 3 до
+7 шагов) и две задачи:
+- `Kinds` — `answer: list[ServiceKind]`, от 1 до 3 видов услуг. `ServiceKind` — `Literal` из 26
+  значений поля «Вид услуги» в параметрах объявлений; в JSON-схеме это `enum`;
+- `Rewrite` — `answer: str`, запрос, переписанный так, как исполнители пишут заголовки: без опечаток,
+  с раскрытым сленгом и 2–4 близкими словами.
+
+`reason_steps` в схеме стоит раньше `answer`. llama.cpp превращает JSON-схему в грамматику и
+генерирует поля в её порядке, так что модель сначала рассуждает и только потом отвечает. Одна и та же
+модель задаёт и промпт, и structured output: её `model_json_schema()` вставляется в системный промпт и
+передаётся в `response_format` (`json_schema`, `strict`), а ответ валидируется `model_validate_json`.
+Невалидный ответ перезапрашивается до трёх раз.
+
+**Few-shot.** Для каждого запроса в промпт подставляются 5 ближайших текстов запросов из `rest` (по
+символьному TF-IDF) с заголовком и видом услуги объявления, выбранного по ним. Для валидации это
+только `rest`, так что утечки нет.
+
+**Запуск.** Адрес сервера и параметры берутся из переменных окружения, а `python-dotenv` подхватывает
+их из локального файла с переменными в корне проекта (он в `.gitignore`):
+
+| переменная | смысл | по умолчанию |
+|---|---|---|
+| `LLM_BASE_URL` | адрес llama-server, например `http://localhost:8080/v1` | обязательна |
+| `LLM_MODEL` | имя модели в запросе | `local` |
+| `LLM_API_KEY` | ключ, llama-server его не проверяет | `local` |
+| `LLM_CONCURRENCY` | параллельных запросов | `4` |
+
+```bash
+uv run python src/llm.py check --task kinds             # один пробный запрос, печатает ответ и время
+uv run python src/llm.py run --task kinds --split valid # все валидационные запросы
+uv run python src/llm.py run --task kinds --split bench # все боевые запросы
+uv run python src/ranker.py --llm kinds rewrite         # ранкер с признаками из ответов LLM
+```
+
+Ответы пишутся построчно в `cache/llm_<задача>.jsonl` по тексту запроса. Прерванный прогон
+продолжается с места остановки, а повторные тексты не запрашиваются второй раз.
+
+**Признаки ранкера** (`ranker.llm_features`, флаг `--llm`): `llm_kind` — 1, 1/2 или 1/3, если вид
+услуги объявления стоит на первом, втором или третьем месте в ответе LLM, иначе 0; для запросов без
+ответа — пропуск. `llm_rewrite_dense` — косинус дообученной bge между переписанным запросом и
+объявлением; без ответа используется исходный запрос.
+
 ### `src/experiment.py` — точка входа
 
 Реестр методов `METHODS`: каждый метод получает `(queries, corpus, rest)` и возвращает top-1000.
@@ -354,6 +401,7 @@ uv run ruff format . && uv run ruff check .   # стиль и линтер, вк
 uv run mypy                                   # типы, strict
 uv run python scripts/check_no_comments.py    # в .py и code-ячейках ноутбуков нет комментариев и докстрингов
 uv run python tests/test_no_comments.py       # самопроверка чекера
+uv run python tests/test_llm_schema.py        # схема ответа LLM: порядок полей, границы, enum
 ```
 
 Ни ruff, ни mypy правило «без комментариев» выразить не могут, поэтому его проверяет
@@ -364,5 +412,5 @@ uv run python tests/test_no_comments.py       # самопроверка чек�
 pandas, pyarrow, NumPy, SciPy, scikit-learn (`TfidfVectorizer`, `CountVectorizer`), tqdm, Jupyter,
 [Natasha](https://github.com/natasha/natasha) (slovnet-морфотеггер, `MorphVocab` на pymorphy2),
 PyTorch, sentence-transformers (модели `intfloat/multilingual-e5-base`, `deepvk/USER-bge-m3`),
-datasets, accelerate, LightGBM;
+datasets, accelerate, LightGBM, openai (клиент к локальному llama-server), pydantic, python-dotenv;
 для разработки ruff, mypy, pandas-stubs, scipy-stubs. Внешних API нет.
