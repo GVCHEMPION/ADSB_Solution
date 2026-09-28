@@ -1,0 +1,58 @@
+[project]
+name = "adsb-solution"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "accelerate>=1.15.0",
+    "datasets>=5.0.1",
+    "ipykernel>=7.3.0",
+    "lightgbm>=4.7.0",
+    "natasha>=1.6.0",
+    "nbconvert>=7.17.1",
+    "numpy>=2.4.6",
+    "openai>=3.19.2",
+    "pandas>=3.0.6",
+    "pyarrow>=25.0.1",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+    "scikit-learn>=1.9.1",
+    "sentence-transformers>=6.1.0",
+    "setuptools<81",
+    "torch>=2.14.0",
+    "tqdm>=4.70.1",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260914",
+    "ruff>=0.16.9",
+    "scipy-stubs>=1.17.1.5",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "NPY", "ERA"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["eval", "retrieval", "lexical", "lemmas", "signals", "dense", "ranker", "rerank", "category0", "llm", "experiment", "check_no_comments"]
+
+[tool.mypy]
+strict = true
+mypy_path = ["src", "scripts"]
+files = ["src", "scripts", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "tqdm.*", "pyarrow.*", "natasha.*", "sentence_transformers.*", "datasets.*", "lightgbm.*"]
+ignore_missing_imports = true
