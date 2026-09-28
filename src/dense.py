@@ -80,7 +80,8 @@ def with_rewrite(name: str, queries: pd.DataFrame, Qe: Embeddings, weight: float
     texts = normalize_query(queries["search_query"])
     rewritten = encode(name, [str(predicted.get(t, t)) for t in texts], query=True)
     mixed = Qe.astype(np.float32) + weight * rewritten.astype(np.float32)
-    return (mixed / np.linalg.norm(mixed, axis=1, keepdims=True)).astype(np.float16)
+    out: Embeddings = (mixed / np.linalg.norm(mixed, axis=1, keepdims=True)).astype(np.float16)
+    return out
 
 
 def dense_hybrid(
