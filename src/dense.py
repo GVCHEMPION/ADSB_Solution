@@ -14,10 +14,11 @@ from sentence_transformers.sentence_transformer.training_args import (
     SentenceTransformerTrainingArguments,
 )
 
+import llm
 from eval import make_holdout
 from lexical import W_BM25, bm25_matrices, char_matrices, normalize, text_head, text_with_description
 from retrieval import CACHE, ROOT, Candidates, Part, search
-from signals import geo_microcat_boost
+from signals import geo_microcat_boost, normalize_query
 
 MODELS = {
     "e5": ("multilingual-e5-base", "query: ", "passage: "),
@@ -74,9 +75,21 @@ def item_embeddings(name: str, ids: pd.Series, texts: pd.Series, variant: str) -
     return emb
 
 
-def dense_hybrid(queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame, name: str) -> Candidates:
+def with_rewrite(name: str, queries: pd.DataFrame, Qe: Embeddings, weight: float) -> Embeddings:
+    predicted = llm.answers("rewrite")
+    texts = normalize_query(queries["search_query"])
+    rewritten = encode(name, [str(predicted.get(t, t)) for t in texts], query=True)
+    mixed = Qe.astype(np.float32) + weight * rewritten.astype(np.float32)
+    return (mixed / np.linalg.norm(mixed, axis=1, keepdims=True)).astype(np.float16)
+
+
+def dense_hybrid(
+    queries: pd.DataFrame, corpus: pd.DataFrame, rest: pd.DataFrame, name: str, rewrite: float = 0.0
+) -> Candidates:
     D = item_embeddings(name, corpus["item_id"], text_head(corpus), "text_head")
     Qe = encode(name, queries["search_query"].tolist(), query=True)
+    if rewrite:
+        Qe = with_rewrite(name, queries, Qe, rewrite)
     Q, X = char_matrices(queries, corpus, text_head)
     Qb, W = bm25_matrices(queries, corpus, text_with_description)
     parts: list[Part] = [(Qe, D, 1.0, False), (Q, X, W_LEXICAL, False), (Qb, W, W_LEXICAL * W_BM25, True)]
