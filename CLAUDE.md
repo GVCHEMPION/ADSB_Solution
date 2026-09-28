@@ -43,13 +43,13 @@ uv run python src/eval.py answer.csv               # contract check — run befo
 ```
 
 Methods live in `METHODS` (`src/experiment.py`); tune weights on fold0, report fold1.
-Scratch grids go in the scratchpad; accepted results and rejected ideas go to README.
+Scratch grids go in the scratchpad; experiment results, accepted or rejected, go to `History.md`.
 
 ## Code rules
 
 **No comments and no docstrings in code** (`.py` and notebook code cells) — user's explicit rule.
-All explanation goes to `README.md` or notebook markdown cells; when adding/changing code, update
-the matching README section. Enforced by `scripts/check_no_comments.py` (ruff/mypy can't express it).
+All explanation goes to `README.md` (the current solution), `History.md` (how it got there) or notebook
+markdown cells; when changing code, update the matching README section. Enforced by `scripts/check_no_comments.py`.
 
 ```bash
 uv run ruff format . && uv run ruff check .
