@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from openai.types.shared_params import ResponseFormatJSONSchema
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 
@@ -51,31 +51,49 @@ ServiceKind = Literal[
 
 
 class Reasoned(BaseModel):
-    reason_steps: list[str] = Field(min_length=3, max_length=7)
+    reason_steps: list[str] = Field(
+        min_length=3,
+        max_length=7,
+        description=(
+            "Пошаговое рассуждение до ответа, от 3 до 7 коротких шагов: что ищет пользователь, какие слова "
+            "запроса ключевые, есть ли в нём опечатки, сокращения или сленг, к какой сфере услуг он "
+            "относится и что подсказывают похожие запросы из истории."
+        ),
+    )
 
 
 class Rewrite(Reasoned):
-    answer: str = Field(min_length=1, max_length=200)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Поисковый запрос пользователя, переписанный языком объявлений исполнителей на Авито."
+            )
+        }
+    )
+    answer: str = Field(
+        min_length=1,
+        max_length=200,
+        description=(
+            "Запрос так, как исполнители написали бы заголовок своего объявления: без опечаток, с раскрытыми "
+            "сокращениями и сленгом, плюс 2–4 близких по смыслу слова. Без города и цены, не длиннее 15 слов."
+        ),
+    )
 
 
 class Kinds(Reasoned):
-    answer: list[ServiceKind] = Field(min_length=1, max_length=3)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": "Виды услуг, к которым относятся объявления, которые ищет пользователь на Авито."
+        }
+    )
+    answer: list[ServiceKind] = Field(
+        min_length=1,
+        max_length=3,
+        description="От 1 до 3 видов услуг из списка допустимых значений, самый вероятный первым.",
+    )
 
 
 TASKS: dict[str, type[Reasoned]] = {"rewrite": Rewrite, "kinds": Kinds}
-
-INSTRUCTIONS = {
-    "kinds": (
-        "Ты помогаешь поиску услуг на Авито. По поисковому запросу пользователя определи, к каким видам "
-        "услуг относятся объявления, которые он ищет. Выбери от 1 до 3 видов из списка в схеме, самый "
-        "вероятный первым."
-    ),
-    "rewrite": (
-        "Ты помогаешь поиску услуг на Авито. Перепиши поисковый запрос так, как исполнители написали бы "
-        "заголовок своего объявления: исправь опечатки, раскрой сокращения и сленг, добавь 2–4 близких "
-        "по смыслу слова. Не добавляй город и цену. Ответ — одна строка не длиннее 15 слов."
-    ),
-}
 
 EXAMPLES = 5
 RETRIES = 3
@@ -85,9 +103,9 @@ MAX_TOKENS = 600
 def system_prompt(task: str) -> str:
     schema = json.dumps(TASKS[task].model_json_schema(), ensure_ascii=False, indent=2)
     return (
-        f"{INSTRUCTIONS[task]}\n\n"
-        "Сначала рассуждай по шагам в поле reason_steps: от 3 до 7 коротких шагов. "
-        "Затем дай ответ в поле answer. Отвечай только JSON строго по схеме:\n"
+        "Ты помогаешь поиску услуг на Авито. Задача описана в JSON-схеме ответа ниже: что нужно сделать, "
+        "сказано в description схемы, смысл каждого поля — в его description. "
+        "Сначала заполни reason_steps, затем answer. Отвечай только JSON строго по схеме:\n"
         f"{schema}"
     )
 

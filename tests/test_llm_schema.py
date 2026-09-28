@@ -11,7 +11,12 @@ from llm import Kinds, Rewrite, response_format, system_prompt
 steps = ["шаг 1", "шаг 2", "шаг 3"]
 
 for model in (Kinds, Rewrite):
-    assert list(model.model_json_schema()["properties"]) == ["reason_steps", "answer"]
+    model_schema = model.model_json_schema()
+    assert list(model_schema["properties"]) == ["reason_steps", "answer"]
+    assert model_schema["description"], f"{model.__name__}: нет описания модели"
+    for field, spec in model_schema["properties"].items():
+        assert spec.get("description"), f"{model.__name__}.{field}: нет description"
+    assert model_schema["description"] in system_prompt(model.__name__.lower())
 
 assert Kinds(reason_steps=steps, answer=["Уборка"]).answer == ["Уборка"]
 assert Rewrite(reason_steps=steps + ["шаг 4"], answer="клининг квартир").answer == "клининг квартир"
