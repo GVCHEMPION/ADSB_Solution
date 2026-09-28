@@ -8,7 +8,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from openai import APIError, AsyncOpenAI
+from openai import APIError, AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionMessageParam
 from openai.types.shared_params import ResponseFormatJSONSchema
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -153,9 +153,12 @@ def client() -> tuple[AsyncOpenAI, str]:
         raise SystemExit(
             "нужна переменная LLM_BASE_URL (адрес llama-server, например http://localhost:8080/v1)"
         )
-    return AsyncOpenAI(base_url=base_url, api_key=os.environ.get("LLM_API_KEY", "local")), os.environ.get(
-        "LLM_MODEL", "local"
+    api = AsyncOpenAI(
+        base_url=base_url,
+        api_key=os.environ.get("LLM_API_KEY", "local"),
+        http_client=DefaultAsyncHttpxClient(trust_env=False),
     )
+    return api, os.environ.get("LLM_MODEL", "local")
 
 
 async def ask(
@@ -173,6 +176,7 @@ async def ask(
             response_format=response_format(task),
             temperature=0.0,
             max_tokens=MAX_TOKENS,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         try:
             return TASKS[task].model_validate_json(response.choices[0].message.content or "")
@@ -236,8 +240,9 @@ async def check(task: str) -> None:
     api, model = client()
     queries, _, rest = make_holdout()
     text = "работа в клиненг"
+    examples = few_shot([text], rest)[0]
     started = time.perf_counter()
-    result = await ask(api, model, task, text, few_shot([text], rest)[0])
+    result = await ask(api, model, task, text, examples)
     print(json.dumps(result.model_dump(), ensure_ascii=False, indent=2))
     print(f"{time.perf_counter() - started:.1f} с на запрос")
 
